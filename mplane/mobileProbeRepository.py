@@ -95,7 +95,6 @@ class MobileProbeService(mplane.scheduler.Service):
     def run(self, spec, check_interrupt):
         # Got a request to retreive measurements. 
         # Get the request parameters
-        print ("run got called")
         period = spec.when().datetimes()
         fromTs = period[0]
         toTs = period[1]
@@ -112,6 +111,7 @@ class MobileProbeService(mplane.scheduler.Service):
         startTime = results[0]["properties"]["date"]
         endTime = results[numberOfMeasurements - 1 ]["properties"]["date"]
         res.set_when(mplane.model.When(a = startTime, b = endTime))
+        
         #put the data
         if res.has_result_column("time") and res.has_result_column("intermediate.link"):
             for i in range(0,  results.count()):
@@ -120,8 +120,6 @@ class MobileProbeService(mplane.scheduler.Service):
                 value = result["properties"]["currentCellLocation"]
                 res.set_result_value("time", date, i)
                 res.set_result_value("intermediate.link", value, i)
-
-
         return res
 
 
