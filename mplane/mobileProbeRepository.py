@@ -78,6 +78,7 @@ def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo"):
     #perform the query, sort by timestamp
     cursor = db[collection].find(query).sort("properties.timeStamp" , 1 )
     #print ("FOUND ", cursor.count(), " measurements")
+
     return cursor
 
 
@@ -90,6 +91,7 @@ def connectionSector_singleton_capability(devices):
     cap.add_parameter("source.device", devices)
     cap.add_result_column("time")
     cap.add_result_column("intermediate.link")
+    cap.add_result_column("snr")
     return cap
 
 
@@ -101,6 +103,7 @@ def connectionSectorLocation_singleton_capability(devices):
     cap.add_parameter("source.device", devices)
     cap.add_result_column("time")
     cap.add_result_column("intermediate.link")
+    cap.add_result_column("snr")
     cap.add_result_column("source.location")
     return cap
 
@@ -149,16 +152,20 @@ class MobileProbeService(mplane.scheduler.Service):
                 result = results[i]
                 date = result["properties"]["date"]
                 value = result["properties"]["currentCellLocation"]
+                snr = result["properties"]["latestGSMSignalStrength"]
                 res.set_result_value("time", date, i)
                 res.set_result_value("intermediate.link", value, i)
+                res.set_result_value("snr", snr, i)
         elif specType == "connected-sector-location":
             for i in range(0,  results.count()):
                 result = results[i]
                 date = result["properties"]["date"]
                 value = result["properties"]["currentCellLocation"]
+                snr = result["properties"]["latestGSMSignalStrength"]
                 location = (result["properties"]["loc_latitude"], result["properties"]["loc_longitude"])
                 res.set_result_value("time", date, i)
                 res.set_result_value("intermediate.link", value, i)
+                res.set_result_value("snr", snr, i)
                 res.set_result_value("source.location", location, i)
         return res
 
@@ -192,8 +199,8 @@ if __name__ == "__main__":
     mplane.model.initialize_registry()
 
     #MANUAL TEST (DISABLE NORMALY)
-        #manually_test_capability()
-        #exit()
+    manually_test_capability()
+    exit()
 
     #create the scheduler 
     scheduler = mplane.scheduler.Scheduler()
