@@ -40,7 +40,12 @@ import argparse
 from pymongo import MongoClient
 
 
+
 def getAvailableDevicesFromDB():
+    """
+    Gets the set of devices that are available in the mobileProbe DB. 
+    This will be used to populate the "source" field.
+    """
     client = MongoClient()
     db = client.mPlaneClient
     devices = db.cellInfo.distinct("properties.deviceID")
@@ -51,37 +56,48 @@ def getAvailableDevicesFromDB():
 
 
 def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo", parameter="currentCellLocation"):
-    #debug (todo:delete)
-    print ("QUERING MONGO DB FOR MEASUREMENTS")
-    print ("DATES  : ", fromTs, " --> ", toTs)
-    print ("DEVICE : ", device)
-    print ("Coll   : ", collection,".", parameter)
-    #init
+    """
+    Get measurements from the db. 
+     Args:
+           fromTs (date): The timestamp to search fromTs
+           toTs (date): The timestamp to search to
+           device (string): The device ID to search for (used in the source field of the spec)
+           collection (string): The db to use
+           parameter (string): The column to use
+     Returns:
+           (Cursor): MongoDB cursor with the results. The cursor only includes the time and the column requested.
+           The cursor is empty if no results are found.       
+    """
+    # Init
     results = []
     client = MongoClient()
     db = client.mPlaneClient
     #query to run
     query = {}
-    query["properties.deviceID"] = device
-    query["properties."+parameter] =  {"$exists": True}
-    query["properties.date"] = {"$gte": fromTs, "$lte": toTs};
+    query["properties.deviceID"] = device 
+    query["properties."+parameter] =  {"$exists": True} # Make sure the parameter we query for exists in the tuple
+    query["properties.date"] = {"$gte": fromTs, "$lte": toTs}; # Temporal Scope
     #data projection (columns to return)
-    projection =  {"properties.date": 1, "properties."+parameter: 1 } 
+    projection =  {"properties.date": 1, "properties."+parameter: 1 } # Only return the parameter
     #perform the query
     cursor = db[collection].find(query, projection).sort("properties.timeStamp" , 1 )
-    print ("FOUND ", cursor.count(), " measurements")
+    #print ("FOUND ", cursor.count(), " measurements")
     return cursor
 
 
-   
 
-
-def rssi_singleton_capability(devices):
+def connectionSector_singleton_capability(devices):
+    """
+    Spec to retreive connected sectors for a device
+    """
     cap = mplane.model.Capability(label="connected-sector", when = "past ... now", verb = "query")
     cap.add_parameter("source.device", devices)
     cap.add_result_column("time")
     cap.add_result_column("intermediate.link")
     return cap
+
+
+    
 
 class MobileProbeService(mplane.scheduler.Service):
     def __init__(self, cap):
@@ -91,7 +107,6 @@ class MobileProbeService(mplane.scheduler.Service):
         super(MobileProbeService, self).__init__(cap)
         print ("INIT SERIVICE")
 
-#fixme: what happens when there are no data. 
     def run(self, spec, check_interrupt):
         # Got a request to retreive measurements. 
         # Get the request parameters
@@ -105,13 +120,19 @@ class MobileProbeService(mplane.scheduler.Service):
         # Put the results into the specification reply msg
         res = mplane.model.Result(specification=spec)
 
+        # iF there are no Results in the db... 
+        if results == None or results.count() == 0:
+            # We set the same temporal scope as the query
+            res.set_when(mplane.model.When(a = period[0], b = period[1]))
+            return res
+
         # put actual start and end time into result
         #fixme: null/empty results.
         numberOfMeasurements = results.count()
         startTime = results[0]["properties"]["date"]
         endTime = results[numberOfMeasurements - 1 ]["properties"]["date"]
         res.set_when(mplane.model.When(a = startTime, b = endTime))
-        
+
         #put the data
         if res.has_result_column("time") and res.has_result_column("intermediate.link"):
             for i in range(0,  results.count()):
@@ -125,10 +146,10 @@ class MobileProbeService(mplane.scheduler.Service):
 
 def manually_test_capability():
     devices = getAvailableDevicesFromDB()
-    svc = MobileProbeService(rssi_singleton_capability("353918050540026,358848043406974,358848047597893,358848043407105,352605059221267,351565050903399,354793051533265,355251056874894,866173010394946,351565054469835,866173010396297,358848047599451,866173010392577,358848047597935,352605059221028,352605059223594"))
+    svc = MobileProbeService(connectionSector_singleton_capability("353918050540026,358848043406974,358848047597893,358848043407105,352605059221267,351565050903399,354793051533265,355251056874894,866173010394946,351565054469835,866173010396297,358848047599451,866173010392577,358848047597935,352605059221028,352605059223594"))
     spec = mplane.model.Specification(capability=svc.capability())
     spec.set_parameter_value("source.device", "353918050540026")
-    spec.set_when("2013-09-20 ... 2013-10-5")
+    spec.set_when("2013-09-20 ... 2013-09-5")
     res = svc.run(spec, lambda: False)
     print(repr(res))
     print(mplane.model.unparse_yaml(res))
@@ -142,14 +163,15 @@ if __name__ == "__main__":
     mplane.model.initialize_registry()
 
     ###MANUAL CHECK SHOULD BE NORMALY DISABLED
-    ## manually_test_capability()
-    ## exit()
+    ##
+    #manually_test_capability()
+    #exit()
     ######
     #create the scheduler 
     scheduler = mplane.scheduler.Scheduler()
     #get devices 
     devices = getAvailableDevicesFromDB()
     #add all the capabilities
-    scheduler.add_service(MobileProbeService(rssi_singleton_capability(devices)))
+    scheduler.add_service(MobileProbeService(connectionSector_singleton_capability(devices)))
     #run the scheduler 
     mplane.httpsrv.runloop(scheduler)
