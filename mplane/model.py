@@ -1,4 +1,6 @@
 #
+# vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
+#
 # mPlane Protocol Reference Implementation
 # Information Model and Element Registry
 #
@@ -577,6 +579,11 @@ class When(object):
         return self._a is not None and self._b is None and self._d is None
 
     def datetimes(self, tzero=None):
+        """
+        Return start and end times as absolute timestamps 
+        for this temporal scope, relative to a given tzero.
+        """
+
         if tzero is None:
             tzero = datetime.utcnow()
 
@@ -1570,6 +1577,13 @@ class Statement(object):
 
     def validate(self):
         raise NotImplementedError("Cannot instantiate a raw Statement")
+
+    def verb(self):
+        """Get this statement's verb"""
+        return self._verb
+
+    def is_query(self):
+        return self._verb == VERB_QUERY
 
     def add_parameter(self, elem_name, constraint=constraint_all, val=None):
         """Programatically add a parameter to this statement."""
