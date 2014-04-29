@@ -1688,6 +1688,7 @@ class Statement(object):
 
     def get_label(self):
         """Return the statement's label"""
+        return self._label
 
     def when(self):
         """Get the statement's temporal scope"""

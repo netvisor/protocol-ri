@@ -43,6 +43,7 @@ source.mac: string
 source.link: string
 source.interface: string
 source.device: string
+source.location: string
 destination.ip4: address
 destination.ip6: address
 destination.port: natural

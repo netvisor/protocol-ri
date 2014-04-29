@@ -55,7 +55,7 @@ def getAvailableDevicesFromDB():
     return parsed
 
 
-def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo", parameter="currentCellLocation"):
+def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo"):
     """
     Get measurements from the db. 
      Args:
@@ -63,7 +63,6 @@ def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo", parameter=
            toTs (date): The timestamp to search to
            device (string): The device ID to search for (used in the source field of the spec)
            collection (string): The db to use
-           parameter (string): The column to use
      Returns:
            (Cursor): MongoDB cursor with the results. The cursor only includes the time and the column requested.
            The cursor is empty if no results are found.       
@@ -75,13 +74,10 @@ def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo", parameter=
     #query to run
     query = {}
     query["properties.deviceID"] = device 
-    query["properties."+parameter] =  {"$exists": True} # Make sure the parameter we query for exists in the tuple
     query["properties.date"] = {"$gte": fromTs, "$lte": toTs}; # Temporal Scope
-    #data projection (columns to return)
-    projection =  {"properties.date": 1, "properties."+parameter: 1 } # Only return the parameter
-    #perform the query
-    cursor = db[collection].find(query, projection).sort("properties.timeStamp" , 1 )
-    #print ("FOUND ", cursor.count(), " measurements")
+    #perform the query, sort by timestamp
+    cursor = db[collection].find(query).sort("properties.timeStamp" , 1 )
+    print ("FOUND ", cursor.count(), " measurements")
     return cursor
 
 
@@ -97,13 +93,23 @@ def connectionSector_singleton_capability(devices):
     return cap
 
 
-    
+def connectionSectorLocation_singleton_capability(devices):
+    """
+    Spec to retreive connected sectors for a device
+    """
+    cap = mplane.model.Capability(label="connected-sector-location", when = "past ... now", verb = "query")
+    cap.add_parameter("source.device", devices)
+    cap.add_result_column("time")
+    cap.add_result_column("intermediate.link")
+    cap.add_result_column("source.location")
+    return cap
+
+
+
 
 class MobileProbeService(mplane.scheduler.Service):
     def __init__(self, cap):
-        # verify the capability is acceptable
-        if not ( cap.has_parameter("source.device"))  and  (cap.has_result_column("time") and cap.has_result_column("intermediate.link")):
-            raise ValueError("capability not acceptable")
+        # ToDo: verify the capability is acceptable
         super(MobileProbeService, self).__init__(cap)
         print ("INIT SERIVICE")
 
@@ -134,22 +140,45 @@ class MobileProbeService(mplane.scheduler.Service):
         res.set_when(mplane.model.When(a = startTime, b = endTime))
 
         #put the data
-        if res.has_result_column("time") and res.has_result_column("intermediate.link"):
+        specType = spec.get_label()
+        print("SPEC: ", specType)
+
+        # Depending on the specification, fill in the reply!
+        if specType == "connected-sector":
             for i in range(0,  results.count()):
                 result = results[i]
                 date = result["properties"]["date"]
                 value = result["properties"]["currentCellLocation"]
                 res.set_result_value("time", date, i)
                 res.set_result_value("intermediate.link", value, i)
+        elif specType == "connected-sector-location":
+            for i in range(0,  results.count()):
+                result = results[i]
+                date = result["properties"]["date"]
+                value = result["properties"]["currentCellLocation"]
+                location = (result["properties"]["loc_latitude"], result["properties"]["loc_longitude"])
+                res.set_result_value("time", date, i)
+                res.set_result_value("intermediate.link", value, i)
+                res.set_result_value("source.location", location, i)
         return res
 
 
 def manually_test_capability():
+    print ("TESTING : connectionSector_singleton_capability")
     devices = getAvailableDevicesFromDB()
-    svc = MobileProbeService(connectionSector_singleton_capability("353918050540026,358848043406974,358848047597893,358848043407105,352605059221267,351565050903399,354793051533265,355251056874894,866173010394946,351565054469835,866173010396297,358848047599451,866173010392577,358848047597935,352605059221028,352605059223594"))
+    svc = MobileProbeService(connectionSector_singleton_capability(devices))
     spec = mplane.model.Specification(capability=svc.capability())
     spec.set_parameter_value("source.device", "353918050540026")
-    spec.set_when("2013-09-20 ... 2013-09-5")
+    spec.set_when("2013-09-20 ... 2013-10-5")
+    res = svc.run(spec, lambda: False)
+    print(repr(res))
+    print(mplane.model.unparse_yaml(res))
+
+    print ("TESTING : connectionSectorLocation_singleton_capability")
+    svc = MobileProbeService(connectionSectorLocation_singleton_capability(devices))
+    spec = mplane.model.Specification(capability=svc.capability())
+    spec.set_parameter_value("source.device", "353918050540026")
+    spec.set_when("2013-09-20 ... 2013-10-5")
     res = svc.run(spec, lambda: False)
     print(repr(res))
     print(mplane.model.unparse_yaml(res))
@@ -162,16 +191,16 @@ if __name__ == "__main__":
     #initialize the registry
     mplane.model.initialize_registry()
 
-    ###MANUAL CHECK SHOULD BE NORMALY DISABLED
-    ##
-    #manually_test_capability()
-    #exit()
-    ######
+    #MANUAL TEST (DISABLE NORMALY)
+        #manually_test_capability()
+        #exit()
+
     #create the scheduler 
     scheduler = mplane.scheduler.Scheduler()
     #get devices 
     devices = getAvailableDevicesFromDB()
     #add all the capabilities
     scheduler.add_service(MobileProbeService(connectionSector_singleton_capability(devices)))
+    scheduler.add_service(MobileProbeService(connectionSectorLocation_singleton_capability(devices)))
     #run the scheduler 
     mplane.httpsrv.runloop(scheduler)
