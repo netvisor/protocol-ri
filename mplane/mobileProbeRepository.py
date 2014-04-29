@@ -51,7 +51,7 @@ def getAvailableDevicesFromDB():
     devices = db.cellInfo.distinct("properties.deviceID")
     devices.remove(None)
     parsed = ",".join(devices)
-    print (parsed)
+    #print (parsed)
     return parsed
 
 
@@ -77,7 +77,7 @@ def getMeasurementFromDB(fromTs, toTs, device, collection="cellInfo"):
     query["properties.date"] = {"$gte": fromTs, "$lte": toTs}; # Temporal Scope
     #perform the query, sort by timestamp
     cursor = db[collection].find(query).sort("properties.timeStamp" , 1 )
-    print ("FOUND ", cursor.count(), " measurements")
+    #print ("FOUND ", cursor.count(), " measurements")
     return cursor
 
 
