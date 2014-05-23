@@ -4,5 +4,5 @@ The Mobile Probe Interface extends the [RI implementation] (https://fp7mplane.gi
 
 More specifically, the Interface sits on top of the MongoDB (where the data are stored) and exports its collections as capabilities. 
 
-
+The usage is the same as in the  [RI implementation] (https://fp7mplane.github.io/protocol-ri) 
 
