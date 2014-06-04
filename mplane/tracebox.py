@@ -74,8 +74,6 @@ def _parse_tracebox(tb_output, quote_size):
             tuples.append(TraceboxValue(pline[1]," ".join(pline[min_words:]), _detail_ipl(pline[2]) if quote_size else ""))
     return tuples
 
-
-
 def _tracebox_process(sipaddr, dipaddr, v, udp=None, dport=None, probe=None, get_icmp_payload_len=None):
     tracebox_argv = list(_traceboxcmd)
     if v is 6:
@@ -254,9 +252,10 @@ class TraceboxService(mplane.scheduler.Service):
         res.set_when(mplane.model.When(a = start_time, b = end_time))
 
         # add results
-        print(tb_parsed_output)
-        
+        print("\n")
+
         for i, onehop in enumerate(tb_parsed_output):
+            print("tracebox "+repr(onehop))
             if res.has_parameter("destination.ip4"):
                 res.set_result_value("tracebox.hop.ip4", onehop.addr,i)
             else:
